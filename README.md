@@ -1,13 +1,15 @@
 # SnoreAlarm
 
-An iOS app that records and analyzes snoring during sleep using machine learning.
+A cross-platform app that records and analyzes snoring during sleep using machine learning.
+
+**Available on iOS, Android, and Web.**
 
 ## Features
 
 - **Sleep Recording** - Record up to 11 hours of audio with background support
-- **ML Snore Detection** - Automatic snoring detection using Apple's SoundAnalysis framework
+- **ML Snore Detection** - Automatic snoring detection using machine learning
 - **Sound Classification** - Distinguishes snoring from talking, coughing, and ambient sounds
-- **Timeline Visualization** - Interactive graph with pinch-to-zoom and tap-to-play
+- **Timeline Visualization** - Interactive graph showing sound events throughout the night
 - **Sleep Statistics** - Track sleep duration, snoring percentage, and loudness (dB)
 - **Session History** - Review past recordings with 7-day trend analysis
 - **Battery Safe** - Auto-stops recording on low battery
@@ -17,70 +19,109 @@ An iOS app that records and analyzes snoring during sleep using machine learning
 
 *Coming soon*
 
-## Requirements
+## Project Structure
+
+This repository contains two implementations:
+
+```
+snorealarm/
+├── src/                    # React Native (Cross-platform)
+│   ├── screens/            # UI screens
+│   ├── services/           # Audio, classification, storage
+│   ├── models/             # TypeScript types
+│   ├── navigation/         # React Navigation setup
+│   └── utils/              # Helper functions
+├── ios/                    # React Native iOS build
+├── android/                # React Native Android build
+└── ios-native/             # Native iOS app (SwiftUI)
+    ├── SnoreAlarm/         # Swift source files
+    └── SnoreAlarmTests/    # Unit tests
+```
+
+---
+
+## React Native (Cross-Platform)
+
+### Requirements
+
+- Node.js 18+
+- npm or yarn
+- For iOS: macOS, Xcode 15+, CocoaPods
+- For Android: Android Studio, JDK 17
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/niranjansd/snorealarm.git
+cd snorealarm
+
+# Install dependencies
+npm install
+
+# iOS only: Install pods
+cd ios && pod install && cd ..
+```
+
+### Running the App
+
+```bash
+# Start Metro bundler
+npm start
+
+# Run on iOS
+npm run ios
+
+# Run on Android
+npm run android
+```
+
+### Tech Stack
+
+- **React Native** - Cross-platform mobile framework
+- **TypeScript** - Type-safe JavaScript
+- **React Navigation** - Navigation library
+- **AsyncStorage** - Local data persistence
+- **react-native-chart-kit** - Data visualization
+- **react-native-fs** - File system access
+
+---
+
+## Native iOS (SwiftUI)
+
+For the best iOS experience with native performance and Apple's SoundAnalysis framework.
+
+### Requirements
 
 - iOS 17.0+
 - Xcode 15.0+
 - Swift 5.0+
 
-## Installation
-
-1. Clone the repository
-   ```bash
-   git clone https://github.com/niranjansd/snorealarm.git
-   ```
-
-2. Open `SnoreAlarm.xcodeproj` in Xcode
-
-3. Set your Development Team in Signing & Capabilities
-
-4. Build and run on your device or simulator
-
-## Project Structure
-
-```
-SnoreAlarm/
-├── App/
-│   ├── SnoreAlarmApp.swift       # App entry point
-│   └── ContentView.swift         # Tab navigation
-├── Features/
-│   ├── Recording/                # Recording UI and logic
-│   ├── Analysis/                 # Timeline graph and statistics
-│   ├── History/                  # Session history list
-│   └── Settings/                 # App settings
-├── Services/
-│   ├── AudioService.swift        # AVFoundation recording/playback
-│   ├── SoundClassifier.swift     # ML-based sound classification
-│   └── BatteryMonitor.swift      # Battery level monitoring
-├── Models/
-│   ├── SleepSession.swift        # Sleep session data model
-│   └── SoundEvent.swift          # Sound event data model
-└── Assets.xcassets/              # App icons and colors
-```
-
-## Tech Stack
-
-- **SwiftUI** - Modern declarative UI framework
-- **SwiftData** - Local data persistence
-- **Swift Charts** - Data visualization
-- **AVFoundation** - Audio recording and playback
-- **SoundAnalysis** - Apple's ML-powered sound classification
-
-## Testing
-
-Run unit tests with `Cmd + U` in Xcode or:
+### Installation
 
 ```bash
+cd ios-native
+open SnoreAlarm.xcodeproj
+```
+
+Set your Development Team in Signing & Capabilities, then build and run.
+
+### Tech Stack
+
+- **SwiftUI** - Modern declarative UI
+- **SwiftData** - Local persistence
+- **Swift Charts** - Data visualization
+- **AVFoundation** - Audio recording/playback
+- **SoundAnalysis** - Apple's ML-powered sound classification
+
+### Testing
+
+```bash
+cd ios-native
 xcodebuild test -scheme SnoreAlarm -destination 'platform=iOS Simulator,name=iPhone 15'
 ```
 
-### Test Coverage
-
-- `SleepSessionTests` - Session model and statistics
-- `SoundEventTests` - Sound event handling
-- `AudioServiceTests` - Audio recording service
-- `BatteryMonitorTests` - Battery monitoring
-- `RecordingViewModelTests` - Recording view model
+---
 
 ## Privacy
 
