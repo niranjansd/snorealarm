@@ -1,0 +1,63 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+*.moved-aside
+
+# Xcode - User-specific files
+xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Xcode - Generated files
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+
+# Code Injection
+iOSInjectionProject/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Thumbnails
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Archives
+*.xcarchive
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Environment
+.env
+.env.local
