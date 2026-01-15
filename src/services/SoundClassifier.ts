@@ -77,7 +77,7 @@ class SoundClassifierClass {
 
   createSoundEvent(
     result: ClassificationResult,
-    sessionStartTime: number,
+    _sessionStartTime: number,
   ): SoundEvent | null {
     const now = Date.now();
 

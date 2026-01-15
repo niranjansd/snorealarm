@@ -1,4 +1,4 @@
-import {SleepSession, SessionStatistics, SoundEvent} from '../models/types';
+import {SleepSession, SessionStatistics} from '../models/types';
 
 export const formatDuration = (seconds: number): string => {
   const hours = Math.floor(seconds / 3600);

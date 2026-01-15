@@ -47,6 +47,7 @@ export const RecordingScreen: React.FC = () => {
       unsubscribeClassifier();
       stopRecordingCleanup();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Switch,
   Linking,
 } from 'react-native';
 import Slider from '@react-native-community/slider';

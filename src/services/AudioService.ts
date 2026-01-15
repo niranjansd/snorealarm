@@ -1,4 +1,4 @@
-import {Platform, NativeModules, NativeEventEmitter} from 'react-native';
+import {Platform} from 'react-native';
 import RNFS from 'react-native-fs';
 
 export interface AudioServiceState {
@@ -102,7 +102,7 @@ class AudioServiceClass {
     };
   }
 
-  async play(filePath: string): Promise<void> {
+  async play(_filePath: string): Promise<void> {
     if (this.isPlaying) {
       await this.stopPlayback();
     }
@@ -111,8 +111,8 @@ class AudioServiceClass {
     // In real implementation, would use react-native-sound or similar
   }
 
-  async playAt(filePath: string, timeSeconds: number): Promise<void> {
-    await this.play(filePath);
+  async playAt(_filePath: string, _timeSeconds: number): Promise<void> {
+    await this.play(_filePath);
     // Seek to time
   }
 
