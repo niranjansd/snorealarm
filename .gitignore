@@ -104,3 +104,10 @@ coverage/
 *.log
 .tmp/
 tmp/
+
+# Web build
+dist/
+webpack-stats.json
+
+# Local settings
+.claude/

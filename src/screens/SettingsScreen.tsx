@@ -8,7 +8,7 @@ import {
   Alert,
   Linking,
 } from 'react-native';
-import Slider from '@react-native-community/slider';
+import Slider from '../components/Slider';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import {useStorage} from '../services/StorageContext';

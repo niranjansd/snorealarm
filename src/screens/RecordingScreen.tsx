@@ -89,8 +89,10 @@ export const RecordingScreen: React.FC = () => {
   );
 
   const startRecording = async () => {
+    console.log('[RecordingScreen] startRecording called');
     try {
       const audioPath = await AudioService.startRecording();
+      console.log('[RecordingScreen] AudioService.startRecording succeeded:', audioPath);
       await SoundClassifier.startAnalyzing();
 
       currentSession.current = {
@@ -109,8 +111,8 @@ export const RecordingScreen: React.FC = () => {
         setDuration(prev => prev + 1);
       }, 1000);
     } catch (error) {
+      console.error('[RecordingScreen] Recording error:', error);
       Alert.alert('Error', 'Failed to start recording. Please try again.');
-      console.error('Recording error:', error);
     }
   };
 
@@ -146,6 +148,7 @@ export const RecordingScreen: React.FC = () => {
   };
 
   const toggleRecording = () => {
+    console.log('[RecordingScreen] toggleRecording called, isRecording:', isRecording);
     if (isRecording) {
       stopRecording();
     } else {
