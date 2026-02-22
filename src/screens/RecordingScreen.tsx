@@ -18,7 +18,7 @@ import {SleepSession, SoundEvent, SoundCategory} from '../models/types';
 import {formatTime, getCategoryColor, normalizeDecibels} from '../utils/helpers';
 
 export const RecordingScreen: React.FC = () => {
-  const {saveSession, updateSession, settings} = useStorage();
+  const {saveSession, updateSession} = useStorage();
 
   const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -128,10 +128,8 @@ export const RecordingScreen: React.FC = () => {
         // Save locally first
         await saveSession(currentSession.current);
 
-        // Upload to S3 if enabled
-        if (settings.s3?.enabled && settings.s3?.autoUpload) {
-          uploadToS3(currentSession.current);
-        }
+        // Always upload to S3
+        uploadToS3(currentSession.current);
 
         currentSession.current = null;
         soundEvents.current = [];
@@ -149,17 +147,6 @@ export const RecordingScreen: React.FC = () => {
   const uploadToS3 = async (session: SleepSession) => {
     try {
       console.log('[RecordingScreen] Starting S3 upload for session:', session.id);
-
-      // Configure S3 if not already done
-      if (!S3UploadService.isConfigured() && settings.s3) {
-        S3UploadService.configure({
-          region: settings.s3.region,
-          bucket: settings.s3.bucket,
-          accessKeyId: settings.s3.accessKeyId,
-          secretAccessKey: settings.s3.secretAccessKey,
-          folder: settings.s3.folder,
-        });
-      }
 
       // Update session status
       const updatedSession = {...session, uploadStatus: 'uploading' as const};

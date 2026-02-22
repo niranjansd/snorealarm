@@ -111,3 +111,8 @@ webpack-stats.json
 
 # Local settings
 .claude/
+
+# Environment variables with AWS credentials
+.env
+.env.local
+.env.*.local

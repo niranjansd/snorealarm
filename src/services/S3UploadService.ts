@@ -1,6 +1,7 @@
 import {S3Client, PutObjectCommand} from '@aws-sdk/client-s3';
 import {Upload} from '@aws-sdk/lib-storage';
 import RNFS from 'react-native-fs';
+import {S3_CONFIG} from '../config/s3.config';
 
 export interface S3Config {
   region: string;
@@ -17,11 +18,32 @@ export interface UploadProgress {
 }
 
 class S3UploadServiceClass {
-  private client: S3Client | null = null;
-  private config: S3Config | null = null;
+  private client: S3Client;
+  private config: S3Config;
+
+  constructor() {
+    // Auto-configure with hardcoded credentials
+    this.config = {
+      region: S3_CONFIG.region,
+      bucket: S3_CONFIG.bucket,
+      accessKeyId: S3_CONFIG.accessKeyId,
+      secretAccessKey: S3_CONFIG.secretAccessKey,
+      folder: S3_CONFIG.folder,
+    };
+
+    this.client = new S3Client({
+      region: this.config.region,
+      credentials: {
+        accessKeyId: this.config.accessKeyId,
+        secretAccessKey: this.config.secretAccessKey,
+      },
+    });
+
+    console.log('[S3Upload] Service initialized with bucket:', this.config.bucket);
+  }
 
   /**
-   * Initialize S3 client with credentials
+   * Initialize S3 client with credentials (legacy - now auto-configured)
    */
   configure(config: S3Config): void {
     this.config = config;
@@ -35,10 +57,10 @@ class S3UploadServiceClass {
   }
 
   /**
-   * Check if S3 is configured
+   * Check if S3 is configured (always true now)
    */
   isConfigured(): boolean {
-    return this.client !== null && this.config !== null;
+    return true;
   }
 
   /**
@@ -53,27 +75,31 @@ class S3UploadServiceClass {
     sessionId: string,
     onProgress?: (progress: UploadProgress) => void,
   ): Promise<string> {
-    if (!this.isConfigured()) {
-      throw new Error('S3UploadService not configured. Call configure() first.');
-    }
-
     try {
       // Read file as base64
       const fileContent = await RNFS.readFile(filePath, 'base64');
       const buffer = Buffer.from(fileContent, 'base64');
 
+      // Check file size limit (100 MB)
+      const fileSizeMB = buffer.length / (1024 * 1024);
+      if (fileSizeMB > S3_CONFIG.maxFileSizeMB) {
+        throw new Error(
+          `File size ${fileSizeMB.toFixed(1)}MB exceeds limit of ${S3_CONFIG.maxFileSizeMB}MB`,
+        );
+      }
+
       // Generate S3 key (path in bucket)
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const fileName = `${sessionId}_${timestamp}.webm`;
-      const key = this.config!.folder
-        ? `${this.config!.folder}/${fileName}`
+      const key = this.config.folder
+        ? `${this.config.folder}/${fileName}`
         : fileName;
 
       // Upload with progress tracking
       const upload = new Upload({
-        client: this.client!,
+        client: this.client,
         params: {
-          Bucket: this.config!.bucket,
+          Bucket: this.config.bucket,
           Key: key,
           Body: buffer,
           ContentType: 'audio/webm',
@@ -98,7 +124,7 @@ class S3UploadServiceClass {
       await upload.done();
 
       // Return S3 URL
-      const url = `https://${this.config!.bucket}.s3.${this.config!.region}.amazonaws.com/${key}`;
+      const url = `https://${this.config.bucket}.s3.${this.config.region}.amazonaws.com/${key}`;
       console.log(`[S3Upload] File uploaded successfully: ${url}`);
       return url;
     } catch (error) {
@@ -114,27 +140,23 @@ class S3UploadServiceClass {
     sessionId: string,
     metadata: any,
   ): Promise<string> {
-    if (!this.isConfigured()) {
-      throw new Error('S3UploadService not configured.');
-    }
-
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const fileName = `${sessionId}_${timestamp}_metadata.json`;
-      const key = this.config!.folder
-        ? `${this.config!.folder}/${fileName}`
+      const key = this.config.folder
+        ? `${this.config.folder}/${fileName}`
         : fileName;
 
       const command = new PutObjectCommand({
-        Bucket: this.config!.bucket,
+        Bucket: this.config.bucket,
         Key: key,
         Body: JSON.stringify(metadata, null, 2),
         ContentType: 'application/json',
       });
 
-      await this.client!.send(command);
+      await this.client.send(command);
 
-      const url = `https://${this.config!.bucket}.s3.${this.config!.region}.amazonaws.com/${key}`;
+      const url = `https://${this.config.bucket}.s3.${this.config.region}.amazonaws.com/${key}`;
       console.log(`[S3Upload] Metadata uploaded: ${url}`);
       return url;
     } catch (error) {
@@ -147,21 +169,21 @@ class S3UploadServiceClass {
    * Test S3 connection
    */
   async testConnection(): Promise<boolean> {
-    if (!this.isConfigured()) {
-      return false;
-    }
-
     try {
       // Try to upload a small test file
       const testData = JSON.stringify({test: true, timestamp: Date.now()});
+      const key = this.config.folder
+        ? `${this.config.folder}/test-connection.json`
+        : 'test-connection.json';
+      
       const command = new PutObjectCommand({
-        Bucket: this.config!.bucket,
-        Key: 'test-connection.json',
+        Bucket: this.config.bucket,
+        Key: key,
         Body: testData,
         ContentType: 'application/json',
       });
 
-      await this.client!.send(command);
+      await this.client.send(command);
       console.log('[S3Upload] Connection test successful');
       return true;
     } catch (error) {

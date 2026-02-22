@@ -1,134 +1,48 @@
-# AWS S3 Auto-Upload Setup
+# AWS S3 Auto-Upload - Admin Documentation
 
-SnoreAlarm can automatically upload your sleep recordings to AWS S3 for backup, archival, or further processing.
+## Overview
 
-## Features
+SnoreAlarm automatically uploads all recordings to a centralized S3 bucket. This happens transparently - **users don't need to configure anything**.
 
-✅ **Auto-Upload** - Recordings automatically upload after stopping  
-✅ **Metadata JSON** - Session data (sound events, timestamps) uploaded alongside audio  
-✅ **Upload Status Tracking** - See if uploads succeeded or failed  
-✅ **Secure** - Credentials stored locally, never shared  
-✅ **Optional** - Works completely offline if disabled  
-
----
-
-## AWS Setup (One-Time)
-
-### Step 1: Create an S3 Bucket
-
-1. Go to [AWS S3 Console](https://s3.console.aws.amazon.com/)
-2. Click **Create bucket**
-3. Choose a unique name (e.g., `my-snorealarm-recordings`)
-4. Select a region (e.g., `us-east-1`)
-5. **Block all public access** - Keep this enabled for privacy
-6. Click **Create bucket**
-
-### Step 2: Create IAM User with S3 Access
-
-1. Go to [AWS IAM Console](https://console.aws.amazon.com/iam/)
-2. Navigate to **Users** → **Create user**
-3. User name: `snorealarm-uploader`
-4. Select **Access key - Programmatic access**
-5. Click **Next**
-
-### Step 3: Attach S3 Permissions
-
-Choose one of these permission options:
-
-#### Option A: Full S3 Access (Simpler)
-1. Click **Attach policies directly**
-2. Search and select **AmazonS3FullAccess**
-3. Click **Next** → **Create user**
-
-#### Option B: Limited Access (More Secure) ⭐ Recommended
-
-1. Click **Create policy**
-2. Select **JSON** tab
-3. Paste this policy (replace `YOUR-BUCKET-NAME`):
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:PutObjectAcl",
-        "s3:GetObject"
-      ],
-      "Resource": "arn:aws:s3:::YOUR-BUCKET-NAME/*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:ListBucket"
-      ],
-      "Resource": "arn:aws:s3:::YOUR-BUCKET-NAME"
-    }
-  ]
-}
-```
-
-4. Click **Next** → Name it `SnoreAlarmS3Upload` → **Create policy**
-5. Go back to user creation → Attach the policy you just created
-
-### Step 4: Get Access Keys
-
-1. After creating the user, click on it
-2. Go to **Security credentials** tab
-3. Click **Create access key**
-4. Select **Other** → Click **Next**
-5. **Save these credentials securely:**
-   - **Access Key ID**: `AKIA...` (20 characters)
-   - **Secret Access Key**: `abcd...` (40 characters)
-
-⚠️ **Important**: You can only see the Secret Access Key once! Save it now.
-
----
-
-## App Configuration
-
-### In SnoreAlarm Settings:
-
-1. Open the app
-2. Go to **Settings** tab
-3. Scroll to **AWS S3 Upload** section
-4. Toggle **Enable S3 Upload** to ON
-5. Click **Show S3 Configuration**
-6. Fill in your credentials:
-   - **Region**: `us-east-1` (or your bucket's region)
-   - **Bucket Name**: `my-snorealarm-recordings`
-   - **Access Key ID**: `AKIA...` (from Step 4)
-   - **Secret Access Key**: `abcd...` (from Step 4)
-   - **Folder** (optional): `recordings` (creates a subfolder)
-7. Click **Test Connection** to verify
-8. Enable **Auto-Upload After Recording**
+**For Users:** Recordings are automatically backed up to secure cloud storage.  
+**For Admins:** This document explains the backend configuration.
 
 ---
 
 ## How It Works
 
-### During Recording:
-1. Audio is recorded locally on your device
-2. Sound events are detected in real-time
+### User Experience:
+1. User records audio on their device
+2. After stopping recording, audio **automatically uploads** to S3
+3. Files are stored locally AND in S3
+4. User sees upload status (success/failed) in their session history
 
-### After Stopping Recording:
-1. Session is saved locally
-2. If S3 upload is enabled:
-   - Audio file uploads to S3: `sessionId_timestamp.webm`
-   - Metadata uploads to S3: `sessionId_timestamp_metadata.json`
-3. Session shows upload status (success/failed)
+### Technical Flow:
+1. App has **embedded AWS credentials** (upload-only access)
+2. After recording stops:
+   - Audio file uploads: `s3://eight-ml-scratch/nirsd/snore/audio/snorealarm/{sessionId}_{timestamp}.webm`
+   - Metadata uploads: `s3://eight-ml-scratch/nirsd/snore/audio/snorealarm/{sessionId}_{timestamp}_metadata.json`
+3. Upload happens in background (user can continue using app)
 
-### S3 File Structure:
+---
+
+## S3 Configuration
+
+### Current Setup:
+
+**Bucket:** `eight-ml-scratch`  
+**Path:** `nirsd/snore/audio/snorealarm/`  
+**Region:** `us-east-1`  
+**IAM User:** Has ONLY `s3:PutObject` permission to that specific path
+
+### File Structure:
 
 ```
-your-bucket-name/
-└── snorealarm-recordings/          # Your folder
-    ├── abc123_2026-02-22.webm      # Audio file
-    ├── abc123_2026-02-22_metadata.json  # Session data
-    ├── def456_2026-02-23.webm
-    └── def456_2026-02-23_metadata.json
+s3://eight-ml-scratch/nirsd/snore/audio/snorealarm/
+├── abc123_2026-02-22T14-30-00.webm
+├── abc123_2026-02-22T14-30-00_metadata.json
+├── def456_2026-02-23T08-15-00.webm
+└── def456_2026-02-23T08-15-00_metadata.json
 ```
 
 ### Metadata JSON Example:
@@ -155,111 +69,255 @@ your-bucket-name/
 
 ---
 
-## Security Best Practices
+## Security
 
-### ✅ DO:
-- Use IAM user with **minimum required permissions** (Option B above)
-- Keep your Secret Access Key **private**
-- Enable **S3 bucket encryption** at rest
-- Enable **S3 versioning** for backup protection
-- Use **S3 lifecycle policies** to auto-delete old recordings
+### IAM Policy (Current Setup)
 
-### ❌ DON'T:
-- Share your AWS credentials with anyone
-- Use your root AWS account credentials
-- Make your S3 bucket publicly accessible
-- Commit credentials to git/GitHub
+The embedded AWS credentials have this IAM policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SnoreAlarmUploadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::eight-ml-scratch/nirsd/snore/audio/snorealarm/*"
+    }
+  ]
+}
+```
+
+**Permissions:**
+- ✅ Can upload files to `nirsd/snore/audio/snorealarm/` folder
+- ❌ Cannot read, list, or delete files
+- ❌ Cannot access any other S3 paths or AWS services
+
+### Security Safeguards:
+
+1. **IAM Restrictions:**
+   - Upload-only access
+   - Limited to specific S3 path
+   - Cannot perform any other AWS operations
+
+2. **App-Side Limits:**
+   - Max file size: 100 MB per recording
+   - Only uploads `.webm` audio files
+   - One upload per recording session
+
+3. **Monitoring (Recommended):**
+   - Set up CloudWatch alarms for unusual upload patterns
+   - S3 lifecycle policy to auto-delete old recordings (optional)
+   - Billing alerts for unexpected costs
+
+### Risk Assessment:
+
+**Threat:** Someone decompiles the app and extracts credentials
+
+**Impact:** Limited - they can only upload files to that specific folder
+
+**Mitigation:**
+- IAM policy prevents reading/listing/deleting files
+- File size limits prevent significant cost abuse
+- CloudWatch can detect unusual activity
+- Credentials can be rotated if needed
 
 ---
 
-## Accessing Your Recordings
+## Rotating Credentials
 
-### Via AWS Console:
-1. Go to [S3 Console](https://s3.console.aws.amazon.com/)
-2. Click your bucket → Navigate to your folder
-3. Download files as needed
+If you need to rotate the AWS credentials:
 
-### Via AWS CLI:
+### 1. Create New IAM User:
+- Console → IAM → Users → Create user
+- Attach the same policy (SnoreAlarmUploadOnly)
+- Generate access keys
 
-```bash
-# List recordings
-aws s3 ls s3://your-bucket-name/snorealarm-recordings/
+### 2. Update Code:
+Edit `src/config/s3.config.ts`:
 
-# Download a specific recording
-aws s3 cp s3://your-bucket-name/snorealarm-recordings/abc123.webm ./
-
-# Download all recordings
-aws s3 sync s3://your-bucket-name/snorealarm-recordings/ ./local-folder/
+```typescript
+export const S3_CONFIG = {
+  region: 'us-east-1',
+  bucket: 'eight-ml-scratch',
+  folder: 'nirsd/snore/audio/snorealarm',
+  accessKeyId: 'NEW_ACCESS_KEY_ID',
+  secretAccessKey: 'NEW_SECRET_KEY',
+  // ...
+};
 ```
+
+### 3. Deploy Update:
+- Rebuild and deploy new app version
+- Old credentials can be disabled after all users update
 
 ---
 
 ## Cost Estimate
 
-AWS S3 pricing (as of 2026, us-east-1):
+**Current Usage (Estimated):**
+- 100 recordings/month
+- 10 MB per recording = 1 GB/month storage
+- 100 PUT requests/month
 
-- **Storage**: $0.023 per GB/month
-- **Upload (PUT)**: $0.005 per 1,000 requests
-- **Download (GET)**: $0.0004 per 1,000 requests
+**Monthly Cost:**
+- Storage: $0.023 per GB = **$0.02**
+- PUT requests: $0.005 per 1,000 = **$0.00**
+- **Total: ~$0.02/month** 💰
 
-**Example Monthly Cost:**
-- 30 recordings/month
-- 10 MB per recording = 300 MB total
-- **Cost**: ~$0.01/month 💰 (essentially free!)
+**Even if abused (1000 recordings, 100 GB):**
+- Storage: **~$2.30/month**
+- Set billing alert at $10/month to detect issues
 
-First year free tier includes:
-- 5 GB of S3 storage
-- 20,000 GET requests
-- 2,000 PUT requests
+---
+
+## Accessing Recordings
+
+### AWS Console:
+1. Go to [S3 Console](https://s3.console.aws.amazon.com/)
+2. Click bucket `eight-ml-scratch`
+3. Navigate to `nirsd/snore/audio/snorealarm/`
+4. Download files as needed
+
+### AWS CLI:
+
+```bash
+# List all recordings
+aws s3 ls s3://eight-ml-scratch/nirsd/snore/audio/snorealarm/
+
+# Download specific recording
+aws s3 cp s3://eight-ml-scratch/nirsd/snore/audio/snorealarm/abc123.webm ./
+
+# Download all recordings
+aws s3 sync s3://eight-ml-scratch/nirsd/snore/audio/snorealarm/ ./local-folder/
+
+# Download just metadata JSONs
+aws s3 sync s3://eight-ml-scratch/nirsd/snore/audio/snorealarm/ ./metadata/ --exclude "*" --include "*_metadata.json"
+```
+
+### Python Script Example:
+
+```python
+import boto3
+
+s3 = boto3.client('s3')
+bucket = 'eight-ml-scratch'
+prefix = 'nirsd/snore/audio/snorealarm/'
+
+# List all recordings
+response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+for obj in response.get('Contents', []):
+    if obj['Key'].endswith('.webm'):
+        print(f"Recording: {obj['Key']}, Size: {obj['Size']} bytes")
+```
+
+---
+
+## Monitoring Setup (Recommended)
+
+### 1. S3 Bucket Metrics:
+- Enable S3 request metrics for the folder
+- Monitor upload volume and patterns
+
+### 2. CloudWatch Alarms:
+
+```bash
+# Alert if > 1000 uploads per day
+aws cloudwatch put-metric-alarm \
+  --alarm-name snorealarm-high-upload-rate \
+  --metric-name NumberOfObjects \
+  --namespace AWS/S3 \
+  --statistic Sum \
+  --period 86400 \
+  --threshold 1000 \
+  --comparison-operator GreaterThanThreshold
+```
+
+### 3. Billing Alerts:
+- AWS Budgets → Create budget
+- Alert at $10/month
+
+### 4. S3 Lifecycle Policy (Optional):
+
+```json
+{
+  "Rules": [{
+    "Id": "DeleteOldRecordings",
+    "Status": "Enabled",
+    "Prefix": "nirsd/snore/audio/snorealarm/",
+    "Expiration": {
+      "Days": 90
+    }
+  }]
+}
+```
+
+This auto-deletes recordings older than 90 days.
 
 ---
 
 ## Troubleshooting
 
-### "S3 connection test failed"
+### Users Report "Upload Failed"
 
 **Check:**
-1. Credentials are correct (no extra spaces)
-2. Bucket name matches exactly
-3. Region matches your bucket's region
-4. IAM user has S3 permissions
-5. Bucket exists and you have access
+1. IAM credentials are still valid
+2. S3 bucket still exists and is accessible
+3. IAM policy hasn't changed
+4. CloudWatch logs for specific error messages
 
-### "Upload failed" after recording
+### High Upload Costs
 
-**Check:**
-1. Internet connection is working
-2. AWS credentials haven't expired
-3. S3 bucket still exists
-4. Check app logs for detailed error
+**Actions:**
+1. Check CloudWatch metrics for upload patterns
+2. Enable S3 lifecycle policy to delete old files
+3. Consider if credentials were compromised
+4. Rotate credentials if suspicious activity
 
-### "Access Denied" error
+### App Can't Upload
 
-**Fix:**
-- Verify IAM policy allows `s3:PutObject` on your bucket
-- Check bucket policy doesn't block uploads
+**Verify:**
+```bash
+# Test credentials manually
+aws s3 cp test.txt s3://eight-ml-scratch/nirsd/snore/audio/snorealarm/test.txt \
+  --profile snorealarm
+```
+
+If this works but app fails, issue is in the app code.
 
 ---
 
-## Disabling S3 Upload
+## Future Improvements
 
-To stop uploading:
-1. Settings → AWS S3 Upload
-2. Toggle **Enable S3 Upload** to OFF
+### Consider These Options:
 
-Your existing local recordings remain unchanged.
+1. **AWS Cognito Identity Pool:**
+   - More secure (temporary credentials)
+   - Slightly more complex to implement
+   - Better for public apps
 
----
+2. **Backend Upload Proxy:**
+   - Most secure (credentials never in app)
+   - Requires maintaining a backend server
+   - Can add validation/processing
 
-## Privacy Note
+3. **Pre-signed URLs:**
+   - Generate time-limited upload URLs
+   - Requires backend to generate URLs
+   - Very secure
 
-- Recordings are uploaded to **your private S3 bucket**
-- AWS credentials stored **locally on device only**
-- No data sent to SnoreAlarm servers (there are none!)
-- You have complete control over your data
+**Current approach (embedded credentials) is acceptable for:**
+- Small user base
+- Internal/customer apps
+- When simplicity is priority
 
 ---
 
 ## Questions?
 
-See the [AWS S3 Documentation](https://docs.aws.amazon.com/s3/) for more information about S3.
+Contact: [Your contact info]
+
+AWS Documentation: https://docs.aws.amazon.com/s3/

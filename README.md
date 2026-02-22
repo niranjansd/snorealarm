@@ -12,7 +12,7 @@ A cross-platform app that records and analyzes snoring during sleep using machin
 - **Timeline Visualization** - Interactive graph showing sound events throughout the night
 - **Sleep Statistics** - Track sleep duration, snoring percentage, and loudness (dB)
 - **Session History** - Review past recordings with 7-day trend analysis
-- **AWS S3 Auto-Upload** - Automatically backup recordings to your private S3 bucket
+- **Auto Cloud Backup** - Recordings automatically backup to secure cloud storage
 - **Battery Safe** - Auto-stops recording on low battery
 - **Privacy First** - All data processed and stored locally on device
 
