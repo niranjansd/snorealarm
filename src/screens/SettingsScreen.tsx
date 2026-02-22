@@ -7,15 +7,20 @@ import {
   TouchableOpacity,
   Alert,
   Linking,
+  TextInput,
+  Switch,
 } from 'react-native';
 import Slider from '../components/Slider';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import {useStorage} from '../services/StorageContext';
+import {S3UploadService} from '../services/S3UploadService';
 
 export const SettingsScreen: React.FC = () => {
   const {settings, updateSettings, clearAllSessions, sessions} = useStorage();
   const [showAbout, setShowAbout] = useState(false);
+  const [showS3Config, setShowS3Config] = useState(false);
+  const [testingS3, setTestingS3] = useState(false);
 
   const handleClearData = () => {
     Alert.alert(
@@ -30,6 +35,44 @@ export const SettingsScreen: React.FC = () => {
         },
       ],
     );
+  };
+
+  const handleTestS3Connection = async () => {
+    if (!settings.s3 || !settings.s3.bucket || !settings.s3.accessKeyId) {
+      Alert.alert('Missing Configuration', 'Please fill in all S3 settings first.');
+      return;
+    }
+
+    setTestingS3(true);
+    try {
+      S3UploadService.configure({
+        region: settings.s3.region,
+        bucket: settings.s3.bucket,
+        accessKeyId: settings.s3.accessKeyId,
+        secretAccessKey: settings.s3.secretAccessKey,
+        folder: settings.s3.folder,
+      });
+
+      const success = await S3UploadService.testConnection();
+      if (success) {
+        Alert.alert('Success', 'S3 connection test successful!');
+      } else {
+        Alert.alert('Failed', 'Could not connect to S3. Check your credentials.');
+      }
+    } catch (error) {
+      Alert.alert('Error', `S3 connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setTestingS3(false);
+    }
+  };
+
+  const updateS3Setting = (key: string, value: any) => {
+    updateSettings({
+      s3: {
+        ...settings.s3!,
+        [key]: value,
+      },
+    });
   };
 
   const getSensitivityLabel = (): string => {
@@ -120,6 +163,123 @@ export const SettingsScreen: React.FC = () => {
             positives. Higher sensitivity is more accurate but may miss some
             snoring events.
           </Text>
+        </>,
+      )}
+
+      {renderSection(
+        'AWS S3 Upload',
+        <>
+          <View style={styles.switchRow}>
+            <View style={styles.switchLabel}>
+              <Icon name="cloud-upload" size={22} color="#007AFF" />
+              <Text style={styles.settingTitle}>Enable S3 Upload</Text>
+            </View>
+            <Switch
+              value={settings.s3?.enabled || false}
+              onValueChange={value => updateS3Setting('enabled', value)}
+            />
+          </View>
+          {settings.s3?.enabled && (
+            <>
+              <TouchableOpacity
+                style={styles.expandButton}
+                onPress={() => setShowS3Config(!showS3Config)}>
+                <Text style={styles.expandButtonText}>
+                  {showS3Config ? 'Hide' : 'Show'} S3 Configuration
+                </Text>
+                <Icon
+                  name={showS3Config ? 'chevron-up' : 'chevron-down'}
+                  size={20}
+                  color="#007AFF"
+                />
+              </TouchableOpacity>
+              
+              {showS3Config && (
+                <View style={styles.s3Config}>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Region</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="us-east-1"
+                      value={settings.s3?.region || ''}
+                      onChangeText={text => updateS3Setting('region', text)}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Bucket Name</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="my-snorealarm-bucket"
+                      value={settings.s3?.bucket || ''}
+                      onChangeText={text => updateS3Setting('bucket', text)}
+                      autoCapitalize="none"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Access Key ID</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="AKIA..."
+                      value={settings.s3?.accessKeyId || ''}
+                      onChangeText={text => updateS3Setting('accessKeyId', text)}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Secret Access Key</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="••••••••"
+                      value={settings.s3?.secretAccessKey || ''}
+                      onChangeText={text => updateS3Setting('secretAccessKey', text)}
+                      secureTextEntry
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Folder (Optional)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="snorealarm-recordings"
+                      value={settings.s3?.folder || ''}
+                      onChangeText={text => updateS3Setting('folder', text)}
+                      autoCapitalize="none"
+                    />
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.testButton, testingS3 && styles.testButtonDisabled]}
+                    onPress={handleTestS3Connection}
+                    disabled={testingS3}>
+                    <Icon name="connection" size={18} color="#fff" />
+                    <Text style={styles.testButtonText}>
+                      {testingS3 ? 'Testing...' : 'Test Connection'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <View style={styles.switchRow}>
+                <Text style={styles.settingTitle}>Auto-Upload After Recording</Text>
+                <Switch
+                  value={settings.s3?.autoUpload || false}
+                  onValueChange={value => updateS3Setting('autoUpload', value)}
+                />
+              </View>
+
+              <Text style={styles.settingHint}>
+                When enabled, recordings will automatically upload to your S3
+                bucket after stopping the recording. Your AWS credentials are
+                stored locally and never shared.
+              </Text>
+            </>
+          )}
         </>,
       )}
 
@@ -336,5 +496,75 @@ const styles = StyleSheet.create({
     color: '#888',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  switchLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  expandButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  expandButtonText: {
+    fontSize: 15,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  s3Config: {
+    marginTop: 8,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: '#F9F9F9',
+    borderRadius: 8,
+  },
+  inputGroup: {
+    marginBottom: 12,
+  },
+  inputLabel: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#333',
+  },
+  testButton: {
+    flexDirection: 'row',
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  testButtonDisabled: {
+    opacity: 0.5,
+  },
+  testButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });

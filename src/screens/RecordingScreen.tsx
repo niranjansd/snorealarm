@@ -13,11 +13,12 @@ import {v4 as uuidv4} from 'uuid';
 import {AudioService} from '../services/AudioService';
 import {SoundClassifier, ClassificationResult} from '../services/SoundClassifier';
 import {useStorage} from '../services/StorageContext';
+import {S3UploadService} from '../services/S3UploadService';
 import {SleepSession, SoundEvent, SoundCategory} from '../models/types';
 import {formatTime, getCategoryColor, normalizeDecibels} from '../utils/helpers';
 
 export const RecordingScreen: React.FC = () => {
-  const {saveSession} = useStorage();
+  const {saveSession, updateSession, settings} = useStorage();
 
   const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -124,7 +125,14 @@ export const RecordingScreen: React.FC = () => {
         currentSession.current.endTime = Date.now();
         currentSession.current.soundEvents = [...soundEvents.current];
 
+        // Save locally first
         await saveSession(currentSession.current);
+
+        // Upload to S3 if enabled
+        if (settings.s3?.enabled && settings.s3?.autoUpload) {
+          uploadToS3(currentSession.current);
+        }
+
         currentSession.current = null;
         soundEvents.current = [];
       }
@@ -135,6 +143,72 @@ export const RecordingScreen: React.FC = () => {
     } catch (error) {
       Alert.alert('Error', 'Failed to save recording.');
       console.error('Stop recording error:', error);
+    }
+  };
+
+  const uploadToS3 = async (session: SleepSession) => {
+    try {
+      console.log('[RecordingScreen] Starting S3 upload for session:', session.id);
+
+      // Configure S3 if not already done
+      if (!S3UploadService.isConfigured() && settings.s3) {
+        S3UploadService.configure({
+          region: settings.s3.region,
+          bucket: settings.s3.bucket,
+          accessKeyId: settings.s3.accessKeyId,
+          secretAccessKey: settings.s3.secretAccessKey,
+          folder: settings.s3.folder,
+        });
+      }
+
+      // Update session status
+      const updatedSession = {...session, uploadStatus: 'uploading' as const};
+      await updateSession(updatedSession);
+
+      // Upload audio file
+      if (session.audioFilePath) {
+        const audioUrl = await S3UploadService.uploadAudioFile(
+          session.audioFilePath,
+          session.id,
+          progress => {
+            console.log(`[S3Upload] Progress: ${progress.percentage.toFixed(1)}%`);
+          },
+        );
+
+        // Upload metadata
+        const metadataUrl = await S3UploadService.uploadSessionMetadata(
+          session.id,
+          {
+            sessionId: session.id,
+            startTime: session.startTime,
+            endTime: session.endTime,
+            duration: session.endTime
+              ? (session.endTime - session.startTime) / 1000
+              : 0,
+            soundEvents: session.soundEvents,
+            tags: session.tags,
+          },
+        );
+
+        // Update session with S3 URLs
+        const finalSession = {
+          ...updatedSession,
+          s3Url: audioUrl,
+          s3MetadataUrl: metadataUrl,
+          uploadStatus: 'success' as const,
+        };
+        await updateSession(finalSession);
+
+        console.log('[RecordingScreen] S3 upload complete:', audioUrl);
+      }
+    } catch (error) {
+      console.error('[RecordingScreen] S3 upload failed:', error);
+      const failedSession = {
+        ...session,
+        uploadStatus: 'failed' as const,
+        uploadError: error instanceof Error ? error.message : 'Unknown error',
+      };
+      await updateSession(failedSession);
     }
   };
 
