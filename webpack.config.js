@@ -68,6 +68,8 @@ module.exports = {
     alias: {
       'react-native$': 'react-native-web',
       '@': path.resolve(appDirectory, 'src'),
+      // Exclude native-only modules for web
+      'react-native-fs': false,
     },
     extensions: [
       '.web.tsx',

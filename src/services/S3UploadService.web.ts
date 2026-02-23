@@ -2,20 +2,12 @@ import {S3Client, PutObjectCommand} from '@aws-sdk/client-s3';
 import {Upload} from '@aws-sdk/lib-storage';
 import {S3_CONFIG} from '../config/s3.config';
 
-// Lazy import for React Native FS (not available on web)
-let RNFS: any = null;
-try {
-  RNFS = require('react-native-fs');
-} catch (e) {
-  console.warn('[S3Upload] react-native-fs not available (web platform)');
-}
-
 export interface S3Config {
   region: string;
   bucket: string;
   accessKeyId: string;
   secretAccessKey: string;
-  folder?: string; // Optional subfolder in bucket
+  folder?: string;
 }
 
 export interface UploadProgress {
@@ -49,9 +41,6 @@ class S3UploadServiceClass {
     console.log('[S3Upload] Service initialized with bucket:', this.config.bucket);
   }
 
-  /**
-   * Initialize S3 client with credentials (legacy - now auto-configured)
-   */
   configure(config: S3Config): void {
     this.config = config;
     this.client = new S3Client({
@@ -63,41 +52,65 @@ class S3UploadServiceClass {
     });
   }
 
-  /**
-   * Check if S3 is configured (always true now)
-   */
   isConfigured(): boolean {
     return true;
   }
 
   /**
-   * Upload audio file to S3
-   * @param filePath - Local path to the audio file
-   * @param sessionId - Unique session ID for organizing files
-   * @param onProgress - Optional callback for upload progress
-   * @returns S3 URL of uploaded file
+   * Web-specific: Load audio from IndexedDB
    */
+  private async loadAudioFromIndexedDB(filePath: string): Promise<Blob> {
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['recordings'], 'readonly');
+      const store = transaction.objectStore('recordings');
+      const request = store.get(filePath);
+      
+      request.onerror = () => reject(new Error('Failed to load recording from IndexedDB'));
+      request.onsuccess = () => {
+        if (request.result) {
+          resolve(request.result);
+        } else {
+          reject(new Error('Recording not found in IndexedDB'));
+        }
+      };
+    });
+  }
+
+  private async openDB(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('SnoreAlarmDB', 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains('recordings')) {
+          db.createObjectStore('recordings');
+        }
+      };
+    });
+  }
+
   async uploadAudioFile(
     filePath: string,
     sessionId: string,
     onProgress?: (progress: UploadProgress) => void,
   ): Promise<string> {
     try {
-      if (!RNFS) {
-        throw new Error('File system not available on this platform');
-      }
-
-      // Read file as base64
-      const fileContent = await RNFS.readFile(filePath, 'base64');
-      const buffer = Buffer.from(fileContent, 'base64');
-
+      // Load audio blob from IndexedDB (web storage)
+      const audioBlob = await this.loadAudioFromIndexedDB(filePath);
+      
       // Check file size limit (100 MB)
-      const fileSizeMB = buffer.length / (1024 * 1024);
+      const fileSizeMB = audioBlob.size / (1024 * 1024);
       if (fileSizeMB > S3_CONFIG.maxFileSizeMB) {
         throw new Error(
           `File size ${fileSizeMB.toFixed(1)}MB exceeds limit of ${S3_CONFIG.maxFileSizeMB}MB`,
         );
       }
+
+      // Convert blob to buffer for upload
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
 
       // Generate S3 key (path in bucket)
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -144,9 +157,6 @@ class S3UploadServiceClass {
     }
   }
 
-  /**
-   * Upload session metadata as JSON
-   */
   async uploadSessionMetadata(
     sessionId: string,
     metadata: any,
@@ -176,12 +186,8 @@ class S3UploadServiceClass {
     }
   }
 
-  /**
-   * Test S3 connection
-   */
   async testConnection(): Promise<boolean> {
     try {
-      // Try to upload a small test file
       const testData = JSON.stringify({test: true, timestamp: Date.now()});
       const key = this.config.folder
         ? `${this.config.folder}/test-connection.json`
