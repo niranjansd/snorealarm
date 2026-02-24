@@ -8,23 +8,12 @@
  * the IAM policy ensures minimal risk by allowing only uploads to one folder.
  */
 
-// Try to import env variables, but don't fail if they're not available
-let REACT_APP_S3_REGION = 'us-east-1';
-let REACT_APP_S3_BUCKET = 'eight-ml-scratch';
-let REACT_APP_S3_FOLDER = 'nirsd/snore/audio/snorealarm';
-let REACT_APP_S3_ACCESS_KEY = '';
-let REACT_APP_S3_SECRET_KEY = '';
-
-try {
-  const env = require('@env');
-  REACT_APP_S3_REGION = env.REACT_APP_S3_REGION || REACT_APP_S3_REGION;
-  REACT_APP_S3_BUCKET = env.REACT_APP_S3_BUCKET || REACT_APP_S3_BUCKET;
-  REACT_APP_S3_FOLDER = env.REACT_APP_S3_FOLDER || REACT_APP_S3_FOLDER;
-  REACT_APP_S3_ACCESS_KEY = env.REACT_APP_S3_ACCESS_KEY || REACT_APP_S3_ACCESS_KEY;
-  REACT_APP_S3_SECRET_KEY = env.REACT_APP_S3_SECRET_KEY || REACT_APP_S3_SECRET_KEY;
-} catch (e) {
-  console.warn('[S3Config] Environment variables not loaded, using defaults');
-}
+// Load from process.env (injected by webpack or React Native)
+const REACT_APP_S3_REGION = process.env.REACT_APP_S3_REGION || 'us-east-1';
+const REACT_APP_S3_BUCKET = process.env.REACT_APP_S3_BUCKET || 'eight-ml-scratch';
+const REACT_APP_S3_FOLDER = process.env.REACT_APP_S3_FOLDER || 'nirsd/snore/audio/snorealarm';
+const REACT_APP_S3_ACCESS_KEY = process.env.REACT_APP_S3_ACCESS_KEY || '';
+const REACT_APP_S3_SECRET_KEY = process.env.REACT_APP_S3_SECRET_KEY || '';
 
 export const S3_CONFIG = {
   region: REACT_APP_S3_REGION,

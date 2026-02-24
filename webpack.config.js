@@ -1,5 +1,7 @@
 const path = require('path');
+const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+require('dotenv').config();
 
 const appDirectory = path.resolve(__dirname);
 
@@ -62,6 +64,13 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       template: path.resolve(appDirectory, 'web/index.html'),
+    }),
+    new webpack.DefinePlugin({
+      'process.env.REACT_APP_S3_REGION': JSON.stringify(process.env.REACT_APP_S3_REGION || 'us-east-1'),
+      'process.env.REACT_APP_S3_BUCKET': JSON.stringify(process.env.REACT_APP_S3_BUCKET || 'eight-ml-scratch'),
+      'process.env.REACT_APP_S3_FOLDER': JSON.stringify(process.env.REACT_APP_S3_FOLDER || 'nirsd/snore/audio/snorealarm'),
+      'process.env.REACT_APP_S3_ACCESS_KEY': JSON.stringify(process.env.REACT_APP_S3_ACCESS_KEY || ''),
+      'process.env.REACT_APP_S3_SECRET_KEY': JSON.stringify(process.env.REACT_APP_S3_SECRET_KEY || ''),
     }),
   ],
   resolve: {
