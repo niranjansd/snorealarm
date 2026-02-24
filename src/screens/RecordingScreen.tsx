@@ -145,6 +145,7 @@ export const RecordingScreen: React.FC = () => {
   };
 
   const uploadToS3 = async (session: SleepSession) => {
+    // Don't crash if S3 upload fails - just log it
     try {
       console.log('[RecordingScreen] Starting S3 upload for session:', session.id);
 

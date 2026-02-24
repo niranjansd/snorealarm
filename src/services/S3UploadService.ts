@@ -38,15 +38,23 @@ class S3UploadServiceClass {
       folder: S3_CONFIG.folder,
     };
 
-    this.client = new S3Client({
-      region: this.config.region,
-      credentials: {
-        accessKeyId: this.config.accessKeyId,
-        secretAccessKey: this.config.secretAccessKey,
-      },
-    });
+    try {
+      this.client = new S3Client({
+        region: this.config.region,
+        credentials: {
+          accessKeyId: this.config.accessKeyId,
+          secretAccessKey: this.config.secretAccessKey,
+        },
+      });
 
-    console.log('[S3Upload] Service initialized with bucket:', this.config.bucket);
+      console.log('[S3Upload] Service initialized with bucket:', this.config.bucket);
+      
+      if (!this.config.accessKeyId || !this.config.secretAccessKey) {
+        console.warn('[S3Upload] AWS credentials not configured - uploads will fail');
+      }
+    } catch (error) {
+      console.error('[S3Upload] Failed to initialize S3 client:', error);
+    }
   }
 
   /**
