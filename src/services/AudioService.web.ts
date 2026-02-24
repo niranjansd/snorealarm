@@ -297,13 +297,20 @@ class AudioServiceClass {
   }
 
   private async saveToIndexedDB(key: string, blob: Blob): Promise<void> {
+    console.log('[AudioService.web] Saving to IndexedDB, key:', key, 'size:', blob.size, 'bytes');
     const db = await this.openDB();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(['recordings'], 'readwrite');
       const store = transaction.objectStore('recordings');
       const request = store.put(blob, key);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve();
+      request.onerror = () => {
+        console.error('[AudioService.web] Failed to save to IndexedDB:', request.error);
+        reject(request.error);
+      };
+      request.onsuccess = () => {
+        console.log('[AudioService.web] Successfully saved to IndexedDB, key:', key);
+        resolve();
+      };
     });
   }
 

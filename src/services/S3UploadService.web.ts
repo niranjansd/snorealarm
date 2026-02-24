@@ -68,17 +68,36 @@ class S3UploadServiceClass {
    * Web-specific: Load audio from IndexedDB
    */
   private async loadAudioFromIndexedDB(filePath: string): Promise<Blob> {
+    console.log('[S3Upload.web] Loading from IndexedDB, key:', filePath);
+    
     const db = await this.openDB();
+    
+    // First, let's list all keys to debug
+    const allKeys = await new Promise<string[]>((resolve) => {
+      const transaction = db.transaction(['recordings'], 'readonly');
+      const store = transaction.objectStore('recordings');
+      const request = store.getAllKeys();
+      request.onsuccess = () => resolve(request.result as string[]);
+      request.onerror = () => resolve([]);
+    });
+    
+    console.log('[S3Upload.web] Available keys in IndexedDB:', allKeys);
+    
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(['recordings'], 'readonly');
       const store = transaction.objectStore('recordings');
       const request = store.get(filePath);
       
-      request.onerror = () => reject(new Error('Failed to load recording from IndexedDB'));
+      request.onerror = () => {
+        console.error('[S3Upload.web] Failed to load from IndexedDB:', request.error);
+        reject(new Error('Failed to load recording from IndexedDB'));
+      };
       request.onsuccess = () => {
         if (request.result) {
+          console.log('[S3Upload.web] Successfully loaded from IndexedDB, size:', request.result.size, 'bytes');
           resolve(request.result);
         } else {
+          console.error('[S3Upload.web] Recording not found in IndexedDB. Key:', filePath, 'Available keys:', allKeys);
           reject(new Error('Recording not found in IndexedDB'));
         }
       };

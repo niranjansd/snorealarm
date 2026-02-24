@@ -128,6 +128,10 @@ export const RecordingScreen: React.FC = () => {
         // Save locally first
         await saveSession(currentSession.current);
 
+        // Wait a moment for IndexedDB to finish saving the audio blob
+        console.log('[RecordingScreen] Waiting for audio to be saved to IndexedDB...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         // Always upload to S3
         uploadToS3(currentSession.current);
 
