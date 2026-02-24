@@ -50,9 +50,9 @@ const fontLoaderConfiguration = {
 module.exports = {
   entry: path.resolve(appDirectory, 'index.web.js'),
   output: {
-    filename: 'bundle.[contenthash].js',
+    filename: 'bundle.js',
     path: path.resolve(appDirectory, 'dist'),
-    clean: true,
+    publicPath: '/',
   },
   module: {
     rules: [
@@ -97,6 +97,10 @@ module.exports = {
     port: 3000,
     hot: true,
     open: true,
+    historyApiFallback: true,
+    devMiddleware: {
+      publicPath: '/',
+    },
   },
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
 };
