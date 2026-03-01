@@ -135,9 +135,7 @@ class S3UploadServiceClass {
         );
       }
 
-      // Convert blob to buffer for upload
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
+      console.log('[S3Upload.web] Uploading audio file, size:', fileSizeMB.toFixed(2), 'MB');
 
       // Generate S3 key (path in bucket)
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -146,13 +144,15 @@ class S3UploadServiceClass {
         ? `${this.config.folder}/${fileName}`
         : fileName;
 
+      console.log('[S3Upload.web] S3 key:', key);
+
       // Upload with progress tracking
       const upload = new Upload({
         client: this.client,
         params: {
           Bucket: this.config.bucket,
           Key: key,
-          Body: buffer,
+          Body: audioBlob, // Use blob directly
           ContentType: 'audio/webm',
           Metadata: {
             sessionId,
