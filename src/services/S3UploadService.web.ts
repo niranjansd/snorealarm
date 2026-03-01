@@ -137,12 +137,14 @@ class S3UploadServiceClass {
 
       console.log('[S3Upload.web] Uploading audio file, size:', fileSizeMB.toFixed(2), 'MB');
 
-      // Generate S3 key (path in bucket)
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const fileName = `${sessionId}_${timestamp}.webm`;
+      // Extract chunk name from filePath (e.g., "session_XXX_chunk_0" -> "chunk_0")
+      const chunkMatch = filePath.match(/_chunk_(\d+)$/);
+      const chunkName = chunkMatch ? `chunk_${chunkMatch[1]}.webm` : `recording_${new Date().toISOString().replace(/[:.]/g, '-')}.webm`;
+      
+      // Organize by session: base_folder/sessionId/chunk_X.webm
       const key = this.config.folder
-        ? `${this.config.folder}/${fileName}`
-        : fileName;
+        ? `${this.config.folder}/${sessionId}/${chunkName}`
+        : `${sessionId}/${chunkName}`;
 
       console.log('[S3Upload.web] S3 key:', key);
 
@@ -189,11 +191,11 @@ class S3UploadServiceClass {
     metadata: any,
   ): Promise<string> {
     try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const fileName = `${sessionId}_${timestamp}_metadata.json`;
+      // Store metadata in the same session folder
+      const fileName = 'metadata.json';
       const key = this.config.folder
-        ? `${this.config.folder}/${fileName}`
-        : fileName;
+        ? `${this.config.folder}/${sessionId}/${fileName}`
+        : `${sessionId}/${fileName}`;
 
       const command = new PutObjectCommand({
         Bucket: this.config.bucket,
@@ -216,9 +218,10 @@ class S3UploadServiceClass {
   async testConnection(): Promise<boolean> {
     try {
       const testData = JSON.stringify({test: true, timestamp: Date.now()});
+      const testSession = `test-${new Date().toISOString().replace(/[:.]/g, '-')}`;
       const key = this.config.folder
-        ? `${this.config.folder}/test-connection.json`
-        : 'test-connection.json';
+        ? `${this.config.folder}/${testSession}/test-connection.json`
+        : `${testSession}/test-connection.json`;
       
       const command = new PutObjectCommand({
         Bucket: this.config.bucket,

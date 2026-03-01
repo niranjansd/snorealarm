@@ -47,8 +47,9 @@ Then:
    ```
 6. Click "Stop Recording"
 7. Check S3 bucket: `s3://eight-ml-scratch/nirsd/snore/audio/snorealarm/`
-   - You should see multiple `.webm` files (one per chunk)
-   - Plus one `.json` metadata file with chunk information
+   - You should see a folder named `session_YYYY-MM-DDTHH-MM-SS-MSSZ/`
+   - Inside: multiple `.webm` files (one per chunk: `chunk_0.webm`, `chunk_1.webm`, etc.)
+   - Plus one `metadata.json` file with chunk information
 
 **Full Test (8+ hours):**
 - Start recording before bed
@@ -181,13 +182,16 @@ After an 8-hour recording, S3 will contain:
 
 ```
 s3://eight-ml-scratch/nirsd/snore/audio/snorealarm/
-├── session_2026-03-01T06-00-00-000Z_chunk_0_2026-03-01T06-00-15-123Z.webm (10 min)
-├── session_2026-03-01T06-00-00-000Z_chunk_1_2026-03-01T06-10-15-456Z.webm (10 min)
-├── session_2026-03-01T06-00-00-000Z_chunk_2_2026-03-01T06-20-15-789Z.webm (10 min)
-├── ... (45 more chunks)
-├── session_2026-03-01T06-00-00-000Z_chunk_47_2026-03-01T13-50-15-999Z.webm (10 min)
-└── session_2026-03-01T06-00-00-000Z_2026-03-01T14-00-30-000Z_metadata.json
+└── session_2026-03-01T06-00-00-000Z/
+    ├── chunk_0.webm (10 min)
+    ├── chunk_1.webm (10 min)
+    ├── chunk_2.webm (10 min)
+    ├── ... (45 more chunks)
+    ├── chunk_47.webm (10 min)
+    └── metadata.json
 ```
+
+**Each session gets its own folder for easy organization!**
 
 **Metadata JSON includes:**
 ```json
