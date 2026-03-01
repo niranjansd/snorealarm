@@ -31,6 +31,8 @@ export const RecordingScreen: React.FC = () => {
   const soundEvents = useRef<SoundEvent[]>([]);
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const uploadedChunks = useRef<string[]>([]);
+  const uploadQueue = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     // Setup audio level listener
@@ -43,9 +45,18 @@ export const RecordingScreen: React.FC = () => {
       handleClassification(result);
     });
 
+    // Setup chunk complete listener for progressive upload
+    const unsubscribeChunkComplete = AudioService.onChunkComplete(
+      (chunkPath, sessionId) => {
+        console.log('[RecordingScreen] Chunk complete:', chunkPath);
+        handleChunkUpload(chunkPath, sessionId);
+      },
+    );
+
     return () => {
       unsubscribeAudio();
       unsubscribeClassifier();
+      unsubscribeChunkComplete();
       stopRecordingCleanup();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -117,6 +128,38 @@ export const RecordingScreen: React.FC = () => {
     }
   };
 
+  const handleChunkUpload = async (chunkPath: string, sessionId: string) => {
+    // Avoid duplicate uploads
+    if (uploadQueue.current.has(chunkPath) || uploadedChunks.current.includes(chunkPath)) {
+      return;
+    }
+
+    uploadQueue.current.add(chunkPath);
+
+    try {
+      console.log('[RecordingScreen] Uploading chunk:', chunkPath);
+      
+      // Wait briefly to ensure IndexedDB write is complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      await S3UploadService.uploadAudioFile(
+        chunkPath,
+        sessionId,
+        progress => {
+          console.log(`[S3Upload] Chunk ${chunkPath}: ${progress.percentage.toFixed(1)}%`);
+        },
+      );
+
+      uploadedChunks.current.push(chunkPath);
+      uploadQueue.current.delete(chunkPath);
+      console.log('[RecordingScreen] Chunk uploaded successfully:', chunkPath);
+    } catch (error) {
+      console.error('[RecordingScreen] Chunk upload failed:', chunkPath, error);
+      uploadQueue.current.delete(chunkPath);
+      // Don't fail the recording, just log the error
+    }
+  };
+
   const stopRecording = async () => {
     try {
       stopRecordingCleanup();
@@ -128,13 +171,16 @@ export const RecordingScreen: React.FC = () => {
         // Save locally first
         await saveSession(currentSession.current);
 
-        // Wait a moment for IndexedDB to finish saving the audio blob
-        console.log('[RecordingScreen] Waiting for audio to be saved to IndexedDB...');
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Wait for IndexedDB to finish saving the last chunk
+        console.log('[RecordingScreen] Waiting for final chunk to be saved...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Always upload to S3
-        uploadToS3(currentSession.current);
+        // Upload metadata to S3
+        uploadMetadataToS3(currentSession.current);
 
+        // Reset for next session
+        uploadedChunks.current = [];
+        uploadQueue.current.clear();
         currentSession.current = null;
         soundEvents.current = [];
       }
@@ -148,53 +194,43 @@ export const RecordingScreen: React.FC = () => {
     }
   };
 
-  const uploadToS3 = async (session: SleepSession) => {
-    // Don't crash if S3 upload fails - just log it
+  const uploadMetadataToS3 = async (session: SleepSession) => {
+    // Upload metadata after all chunks are uploaded
     try {
-      console.log('[RecordingScreen] Starting S3 upload for session:', session.id);
+      console.log('[RecordingScreen] Uploading metadata for session:', session.id);
 
       // Update session status
       const updatedSession = {...session, uploadStatus: 'uploading' as const};
       await updateSession(updatedSession);
 
-      // Upload audio file
-      if (session.audioFilePath) {
-        const audioUrl = await S3UploadService.uploadAudioFile(
-          session.audioFilePath,
-          session.id,
-          progress => {
-            console.log(`[S3Upload] Progress: ${progress.percentage.toFixed(1)}%`);
-          },
-        );
+      // Upload metadata (audio chunks were uploaded progressively)
+      const metadataUrl = await S3UploadService.uploadSessionMetadata(
+        session.id,
+        {
+          sessionId: session.id,
+          startTime: session.startTime,
+          endTime: session.endTime,
+          duration: session.endTime
+            ? (session.endTime - session.startTime) / 1000
+            : 0,
+          soundEvents: session.soundEvents,
+          tags: session.tags,
+          chunkCount: uploadedChunks.current.length,
+          uploadedChunks: uploadedChunks.current,
+        },
+      );
 
-        // Upload metadata
-        const metadataUrl = await S3UploadService.uploadSessionMetadata(
-          session.id,
-          {
-            sessionId: session.id,
-            startTime: session.startTime,
-            endTime: session.endTime,
-            duration: session.endTime
-              ? (session.endTime - session.startTime) / 1000
-              : 0,
-            soundEvents: session.soundEvents,
-            tags: session.tags,
-          },
-        );
+      // Update session with metadata URL
+      const finalSession = {
+        ...updatedSession,
+        s3MetadataUrl: metadataUrl,
+        uploadStatus: 'success' as const,
+      };
+      await updateSession(finalSession);
 
-        // Update session with S3 URLs
-        const finalSession = {
-          ...updatedSession,
-          s3Url: audioUrl,
-          s3MetadataUrl: metadataUrl,
-          uploadStatus: 'success' as const,
-        };
-        await updateSession(finalSession);
-
-        console.log('[RecordingScreen] S3 upload complete:', audioUrl);
-      }
+      console.log('[RecordingScreen] Metadata upload complete. Total chunks uploaded:', uploadedChunks.current.length);
     } catch (error) {
-      console.error('[RecordingScreen] S3 upload failed:', error);
+      console.error('[RecordingScreen] Metadata upload failed:', error);
       const failedSession = {
         ...session,
         uploadStatus: 'failed' as const,

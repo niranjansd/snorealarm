@@ -9,6 +9,7 @@ export interface AudioServiceState {
 }
 
 type AudioEventCallback = (decibels: number) => void;
+type ChunkCompleteCallback = (chunkPath: string, sessionId: string) => void;
 
 class AudioServiceClass {
   private isRecording: boolean = false;
@@ -16,6 +17,7 @@ class AudioServiceClass {
   private recordingPath: string | null = null;
   private recordingStartTime: number = 0;
   private audioEventCallbacks: AudioEventCallback[] = [];
+  private chunkCompleteCallbacks: ChunkCompleteCallback[] = [];
   private currentDecibels: number = -60;
 
   // Web Audio API
@@ -25,6 +27,13 @@ class AudioServiceClass {
   private analyser: AnalyserNode | null = null;
   private animationFrameId: number | null = null;
   private audioElement: HTMLAudioElement | null = null;
+
+  // Chunked recording
+  private currentSessionId: string | null = null;
+  private currentChunkIndex: number = 0;
+  private chunkInterval: number | null = null;
+  private readonly CHUNK_DURATION_MS = 10 * 60 * 1000; // 10 minutes
+  private allChunkPaths: string[] = [];
 
   getState(): AudioServiceState {
     return {
@@ -55,6 +64,14 @@ class AudioServiceClass {
       const stream = await navigator.mediaDevices.getUserMedia({audio: true});
       console.log('[AudioService.web] Microphone access granted');
 
+      // Generate a unique session ID
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      this.currentSessionId = `session_${timestamp}`;
+      this.currentChunkIndex = 0;
+      this.allChunkPaths = [];
+      this.recordingStartTime = Date.now();
+      this.isRecording = true;
+
       // Create audio context and analyser for metering
       this.audioContext = new AudioContext();
       this.analyser = this.audioContext.createAnalyser();
@@ -63,31 +80,97 @@ class AudioServiceClass {
       const source = this.audioContext.createMediaStreamSource(stream);
       source.connect(this.analyser);
 
-      // Create MediaRecorder
-      this.mediaRecorder = new MediaRecorder(stream);
-      this.audioChunks = [];
-
-      this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          this.audioChunks.push(event.data);
-        }
-      };
-
-      this.mediaRecorder.start(1000); // Collect data every second
-
-      // Generate a unique path/ID for this recording
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      this.recordingPath = `recording_${timestamp}`;
-      this.recordingStartTime = Date.now();
-      this.isRecording = true;
+      // Start first chunk
+      await this.startNewChunk(stream);
 
       // Start metering
       this.startMetering();
 
-      return this.recordingPath;
+      // Set up automatic chunk rotation
+      this.startChunkRotation(stream);
+
+      console.log('[AudioService.web] Started chunked recording, session:', this.currentSessionId);
+      return this.currentSessionId;
     } catch (error) {
       console.warn('Microphone not available, using simulation mode:', error);
       return this.startSimulatedRecording();
+    }
+  }
+
+  private async startNewChunk(stream: MediaStream): Promise<void> {
+    // Save previous chunk if exists
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      await this.finalizeCurrentChunk();
+    }
+
+    // Create MediaRecorder for new chunk
+    this.mediaRecorder = new MediaRecorder(stream);
+    this.audioChunks = [];
+
+    this.mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        this.audioChunks.push(event.data);
+      }
+    };
+
+    const chunkPath = `${this.currentSessionId}_chunk_${this.currentChunkIndex}`;
+    this.recordingPath = chunkPath;
+    this.currentChunkIndex++;
+
+    console.log('[AudioService.web] Starting chunk:', chunkPath);
+    this.mediaRecorder.start(1000); // Collect data every second
+  }
+
+  private async finalizeCurrentChunk(): Promise<void> {
+    if (!this.mediaRecorder || !this.recordingPath) {
+      return;
+    }
+
+    return new Promise((resolve) => {
+      const chunkPath = this.recordingPath!;
+      
+      this.mediaRecorder!.onstop = async () => {
+        if (this.audioChunks.length === 0) {
+          console.log('[AudioService.web] Chunk has no data, skipping:', chunkPath);
+          resolve();
+          return;
+        }
+
+        // Create blob from chunks
+        const audioBlob = new Blob(this.audioChunks, {type: 'audio/webm'});
+        console.log('[AudioService.web] Finalized chunk:', chunkPath, 'size:', audioBlob.size, 'bytes');
+
+        // Store in IndexedDB
+        await this.saveToIndexedDB(chunkPath, audioBlob);
+        this.allChunkPaths.push(chunkPath);
+
+        // Notify listeners that chunk is ready for upload
+        this.chunkCompleteCallbacks.forEach((callback) => {
+          callback(chunkPath, this.currentSessionId!);
+        });
+
+        this.audioChunks = [];
+        resolve();
+      };
+
+      this.mediaRecorder!.stop();
+    });
+  }
+
+  private startChunkRotation(stream: MediaStream): void {
+    this.chunkInterval = window.setInterval(async () => {
+      if (!this.isRecording) {
+        return;
+      }
+      console.log('[AudioService.web] Rotating to new chunk after', this.CHUNK_DURATION_MS / 1000, 'seconds');
+      await this.startNewChunk(stream);
+    }, this.CHUNK_DURATION_MS);
+  }
+
+  private stopChunkRotation(): void {
+    if (this.chunkInterval) {
+      clearInterval(this.chunkInterval);
+      this.chunkInterval = null;
     }
   }
 
@@ -137,45 +220,52 @@ class AudioServiceClass {
       return null;
     }
 
+    console.log('[AudioService.web] Stopping recording, session:', this.currentSessionId);
+
+    // Stop chunk rotation
+    this.stopChunkRotation();
+
     // Handle simulated recording (no mediaRecorder)
     if (!this.mediaRecorder) {
       this.stopSimulatedMetering();
-      const path = this.recordingPath;
+      const sessionId = this.currentSessionId;
       this.isRecording = false;
       this.recordingPath = null;
       this.recordingStartTime = 0;
-      return path;
+      this.currentSessionId = null;
+      return sessionId;
     }
 
-    return new Promise((resolve) => {
-      this.mediaRecorder!.onstop = async () => {
-        // Create blob from chunks
-        const audioBlob = new Blob(this.audioChunks, {type: 'audio/webm'});
+    // Finalize the last chunk
+    await this.finalizeCurrentChunk();
 
-        // Store in IndexedDB
-        if (this.recordingPath) {
-          await this.saveToIndexedDB(this.recordingPath, audioBlob);
-        }
+    // Stop audio tracks
+    if (this.mediaRecorder && this.mediaRecorder.stream) {
+      this.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+    }
 
-        this.stopMetering();
-        const path = this.recordingPath;
-        this.isRecording = false;
-        this.recordingPath = null;
-        this.recordingStartTime = 0;
-        this.audioChunks = [];
+    this.stopMetering();
+    
+    const sessionId = this.currentSessionId;
+    const allChunks = [...this.allChunkPaths];
+    
+    console.log('[AudioService.web] Recording stopped. Total chunks:', allChunks.length);
+    
+    this.isRecording = false;
+    this.recordingPath = null;
+    this.recordingStartTime = 0;
+    this.audioChunks = [];
+    this.currentSessionId = null;
+    this.currentChunkIndex = 0;
+    this.allChunkPaths = [];
 
-        // Close audio context
-        if (this.audioContext) {
-          this.audioContext.close();
-          this.audioContext = null;
-        }
+    // Close audio context
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
 
-        resolve(path);
-      };
-
-      this.mediaRecorder!.stop();
-      this.mediaRecorder!.stream.getTracks().forEach((track) => track.stop());
-    });
+    return sessionId;
   }
 
   private startMetering(): void {
@@ -223,6 +313,20 @@ class AudioServiceClass {
         this.audioEventCallbacks.splice(index, 1);
       }
     };
+  }
+
+  onChunkComplete(callback: ChunkCompleteCallback): () => void {
+    this.chunkCompleteCallbacks.push(callback);
+    return () => {
+      const index = this.chunkCompleteCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.chunkCompleteCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  getAllChunkPaths(): string[] {
+    return [...this.allChunkPaths];
   }
 
   async play(_filePath: string): Promise<void> {
